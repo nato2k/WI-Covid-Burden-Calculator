@@ -90,7 +90,7 @@ c.execute("update covid_geo set date = date(round(date / 1000), 'unixepoch', 'lo
 conn.commit()
 
 # sql query to calculate burden
-sql = """select zip, round(total * burden_mult, 0) as burden
+sql = """select zip, round(total) as total, round(total * burden_mult, 0) as burden
     from (
         select zip, sum(cases) as total, burden_mult from (
             select t2.zip, t1.new * t2.share as cases, t2.burden_mult from (
@@ -138,8 +138,8 @@ if c.fetchone()[0] == 0:
     print("saving new results...")
 else:
     res_sql = """SELECT date from covid_results where date = '{}' """.format(maxdt["dt"][0])
-    c.execute(res_sql)
-    if c.fetchone()[0] == 0:
+    res_df = pd.read_sql_query(res_sql, conn)
+    if len(res_df) == 0:
         res.to_sql("covid_results", conn, if_exists='append')
         print("saving new results...")
     else:
