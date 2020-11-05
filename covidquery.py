@@ -90,7 +90,7 @@ c.execute("update covid_geo set date = date(round(date / 1000), 'unixepoch', 'lo
 conn.commit()
 
 # sql query to calculate burden
-sql = """select zip, round(total) as total, round(total * burden_mult, 0) as burden
+sql = """select zip, round(total) as total, burden_mult as burden_multiplier, round(total * burden_mult, 0) as burden
     from (
         select zip, sum(cases) as total, burden_mult from (
             select t2.zip, t1.new * t2.share as cases, t2.burden_mult from (
