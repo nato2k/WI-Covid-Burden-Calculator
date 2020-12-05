@@ -34,22 +34,7 @@ zips = ['53092', '53097']
 zdf = getzips(zips, "zip", zip_secret())
 zdf.to_sql("zips", conn, if_exists='replace')
 
-# check if census table exists
-c.execute(''' SELECT count(name) FROM sqlite_master WHERE type='table' AND name='census' ''')
-
-if c.fetchone()[0] == 1:
-    print("census table exists, not requesting new data")
-else:
-    # pull census data for WI
-    print("Requesting census data...")
-    census_secret = census_secret()
-    census_url = "https://api.census.gov/data/2010/acs/acs5/profile?get=NAME,DP02_0017E&for=tract:*&in=state:55&key=" + census_secret
-    census_res = ur.urlopen(census_url)
-    census_data = json.loads(census_res.read())
-    census_df = pd.DataFrame(census_data[1:], columns=census_data[0]).rename(columns={"DP02_0017E": "Pop"})
-    census_df.to_sql("census", conn)
-    c.execute("update census set geoid = state || county || tract;")
-    conn.commit()
+getcensus("census", conn, c, census_secret())
 
 # set todays date format
 d1 = datetime.datetime.today()
@@ -123,27 +108,36 @@ maxdt = pd.read_sql_query("select distinct max(date) as dt from covid_geo;", con
 print("data for: " + maxdt["dt"][0])
 res = pd.read_sql_query(sql, conn, params=zips)
 
+sql_print = "select * from (select zip, burden, date, total, burden_multiplier, burden - lag(burden) over(order by zip, date) as differ from covid_results) order by date, zip;"
 if len(res) == 0:
-    print("no new results returned, exiting...")
+    print("no new results for today, exiting...")
+    res_print = pd.read_sql_query(sql_print, conn)
+    print(res_print)
     conn.close
     quit()
 
 res["date"] = maxdt["dt"][0]
-print(res)
+sql_print = "select zip, date, burden, burden_change, total, burden_multiplier  from (select *, burden - lag(burden) over(partition by zip order by date) as burden_change from covid_results) order by date, zip;"
 
 # check if census table exists
 c.execute(''' SELECT count(name) FROM sqlite_master WHERE type='table' AND name='covid_results' ''')
 if c.fetchone()[0] == 0:
     res.to_sql("covid_results", conn)
+    res_print = pd.read_sql_query(sql_print, conn)
     print("saving new results...")
+    print(res_print)
 else:
     res_sql = """SELECT date from covid_results where date = '{}' """.format(maxdt["dt"][0])
     res_df = pd.read_sql_query(res_sql, conn)
     if len(res_df) == 0:
         res.to_sql("covid_results", conn, if_exists='append')
+        res_print = pd.read_sql_query(sql_print, conn)
         print("saving new results...")
+        print(res_print)
     else:
-        print("no new results, not saving...")
+        print("results already updated for today, not saving...")
+        res_print = pd.read_sql_query(sql_print, conn)
+        print(res_print)
 
 conn.close
 print("done")

@@ -27,7 +27,16 @@ def createurl(geos):
 # url for tract data https://www.huduser.gov/hudapi/public/usps?type=6&query=55089660100
 # url for zipcode data request by zipcode https://www.huduser.gov/hudapi/public/usps?type=1&query=53092
 
-# check if zip table exists
+def getcensus(tbl, conn, c, secrt):
+    print("Requesting census data...")
+    census_url = "https://api.census.gov/data/2010/acs/acs5/profile?get=NAME,DP02_0017E&for=tract:*&in=state:55&key=" + secrt
+    census_res = ur.urlopen(census_url)
+    census_data = json.loads(census_res.read())
+    census_df = pd.DataFrame(census_data[1:], columns=census_data[0]).rename(columns={"DP02_0017E": "Pop"})
+    census_df.to_sql(tbl, conn, if_exists='replace')
+    c.execute("alter table census add geoid;") 
+    c.execute("update census set geoid = state || county || tract;")
+    conn.commit()
 
 # def getzips(zips, tbl, typ, conn, c):
 def getzips(zips, typ, zip_secret):
